@@ -1,0 +1,6 @@
+bitshares
+#sqlalchemy
+#redis
+#pyfcm
+pyyaml
+mysql-connector-python

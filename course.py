@@ -1,8 +1,10 @@
 from bitshares.market import Market
+from bitshares import exceptions as BTSExceptions
 import time
 import os
 import yaml
 import mysql.connector
+from mysql.connector import errorcode
 from pprint import pprint
 
 #sql_map:
@@ -11,26 +13,24 @@ TABLES['courses'] = (
   "CREATE TABLE `courses` ("
   "  `id` int NOT NULL AUTO_INCREMENT,"
   "  `datetime` datetime NOT NULL,"
-  "  `base` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
+  "  `base` VARCHAR(255) NOT NULL,"
+  "  `base_id` INT,"
   "  `base_amount` double NOT NULL,"
   "  `quote` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
+  "  `quote_id` INT,"
   "  `quote_amount` double NOT NULL,"
   "  `price` double NOT NULL,"
-  "  PRIMARY KEY (`id`)" 
-#  "  INDEX (base),"
-#  "  INDEX (quote),"
-#  "  FOREIGN KEY (base) REFERENCES p2pbridge_assets (symbol) ON DELETE RESTRICT ON UPDATE CASCADE,"
-#  "  FOREIGN KEY (quote) REFERENCES p2pbridge_assets (symbol) ON DELETE RESTRICT ON UPDATE CASCADE"
+  "  PRIMARY KEY (`id`)," 
+  "  INDEX (base_id),"
+  "  INDEX (quote_id),"
+  "  FOREIGN KEY (base_id) REFERENCES p2pbridge_assets (id) ON DELETE RESTRICT ON UPDATE CASCADE,"
+  "  FOREIGN KEY (quote_id) REFERENCES p2pbridge_assets (id) ON DELETE RESTRICT ON UPDATE CASCADE"
   ") ENGINE=InnoDB")
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 with open('app.conf') as f:
   conf = yaml.safe_load(f.read())
 sql_conf=conf.get('sql')
-market = Market("USD:BTS")
-#(2018-05-20 17:37:24) 0.0000 USD 0.00000 BTS @ inf BTS/USD
-#(2018-05-21 04:59:57) 0.0000 USD 0.00000 BTS @ inf BTS/USD
-#(2018-05-21 13:28:42) 0.0000 USD 0.00000 BTS @ inf BTS/USD
 
 def formQuery(arTrades):
     result_query=''
@@ -38,7 +38,7 @@ def formQuery(arTrades):
     arTrades.reverse()
     for trade in arTrades:
         hole = str(trade).find('inf')
-        if hole!=-1: print(str(trade))
+        if hole!=-1: continue #print(str(trade))
         trade['base_amount'] = str(trade['base']).split()[0].replace(',','')
         trade['base_lit'] = str(trade['base']).split()[1]
         trade['quote_amount'] = str(trade['quote']).split()[0].replace(',','')
@@ -78,7 +78,7 @@ def gettrades(start=False, stop=False):
 #sudo docker container start mysql-server
 
 ########Data base connect######################
-cnx = mysql.connector.connect(user=sql_conf['username'], password=sql_conf['password'], host=sql_conf['host'])#, database='bitshares')
+cnx = mysql.connector.connect(user=sql_conf['username'], password=sql_conf['password'], host=sql_conf['host'])#, database=sql_conf['db'])
 cursor = cnx.cursor()
 ###############################################
 
@@ -115,18 +115,28 @@ for name, ddl in TABLES.items():
     else:
         print("OK")
 ##############################################
-query = "SELECT datetime FROM courses ORDER BY id DESC LIMIT 1"
-cursor.execute(query)
-values = cursor.fetchall()
-if len(values )>0: time_last_deal = values[0][0].isoformat()
-else: time_last_deal = time.strftime('%Y-%m-%dT%X',time.localtime(time.time() - 259200))
-result = gettrades(time_last_deal)
-if len(result)>0:
-    query = formQuery(result)
+def noname(base, amount):
+    try:
+        market = Market("{}:{}".format(base, amount))
+    except BTSExceptions.AssetDoesNotExistsException:
+        #raise Exception("")
+        return
+    query = "SELECT datetime FROM courses WHERE base='{}' AND quote='{}' ORDER BY id DESC LIMIT 1".format(base, amount)
     cursor.execute(query)
-    cnx.commit()
+    values = cursor.fetchall()
+    if len(values)>0: time_last_deal = values[0][0].isoformat()
+    else: time_last_deal = time.strftime('%Y-%m-%dT%X',time.localtime(time.time() - 259200))
+    result = gettrades(time_last_deal)
+    if len(result)>0:
+        query = formQuery(result)
+        cursor.execute(query)
+        cnx.commit()
 
-query = "SELECT datetime, base, base_amount, quote, quote_amount, price FROM courses"
+noname('USD','BTS')
+noname('RUB','BTS')
+noname('UsSD','BTS')
+
+#query = "SELECT datetime, base, base_amount, quote, quote_amount, price FROM courses"
 #cursor.execute(query)
 
 #for (datetime, base, base_amount, quote, quote_amount, price) in cursor:

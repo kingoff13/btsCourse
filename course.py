@@ -1,5 +1,6 @@
 from bitshares.market import Market
 from bitshares import exceptions as BTSExceptions
+from requests import get
 import time
 import os
 import yaml
@@ -9,7 +10,20 @@ from pprint import pprint
 
 #sql_map:
 TABLES = {}
-TABLES['courses'] = (
+TABLES['p2pbridge_exchange_rates'] = (
+        "CREATE TABLE `p2pbridge_exchange_rates` ("
+	"`ID` INT(11) NOT NULL AUTO_INCREMENT,"
+	"`SOURCE` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
+	"`DATE` DATE NOT NULL,"
+	"`ASSET1` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
+	"`ASSET2` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
+	"`VALUE` DOUBLE NOT NULL,"
+	"PRIMARY KEY (`ID`))"
+"COLLATE='utf8_unicode_ci',"
+"ENGINE=InnoDB,"
+"AUTO_INCREMENT=27")
+
+'''
   "CREATE TABLE `courses` ("
   "  `id` int NOT NULL AUTO_INCREMENT,"
   "  `datetime` datetime NOT NULL,"
@@ -26,11 +40,12 @@ TABLES['courses'] = (
   "  FOREIGN KEY (base_id) REFERENCES p2pbridge_assets (id) ON DELETE RESTRICT ON UPDATE CASCADE,"
   "  FOREIGN KEY (quote_id) REFERENCES p2pbridge_assets (id) ON DELETE RESTRICT ON UPDATE CASCADE"
   ") ENGINE=InnoDB")
-
+'''
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 with open('app.conf') as f:
   conf = yaml.safe_load(f.read())
 sql_conf=conf.get('sql')
+assets = conf.get('assets')
 
 def formQuery(arTrades):
     result_query=''
@@ -114,7 +129,7 @@ for name, ddl in TABLES.items():
     else:
         print("OK")
 ##############################################
-def noname(pair):
+def getDataFromBitshares(pair):
     try:
         market = Market("{}:{}".format(pair[0], pair[1]))
     except BTSExceptions.AssetDoesNotExistsException:
@@ -132,22 +147,39 @@ def noname(pair):
         cursor.execute(query)
         cnx.commit()
 
-query = "SELECT id, asset_id, symbol FROM p2pbridge_assets WHERE ACTIVE='Y'"
-cursor.execute(query)
-assets = cursor.fetchall()
-pairs=[]
-for i in range(len(assets)-1):
-    item = assets.pop(0)
-    for value in assets:
-        base=item[1] if (item[1].strip() and item[1]!='0') else item[2]
-        quote=value[1] if (value[1].strip() and value[1]!='0') else value[2]
-        pairs.append((base,quote))
-for pair in pairs:
-    noname(pair)
+def getDataFromCoinmarketcap(ids, convert=False):
+    result=[]
+    work={}
+    r = get('https://api.coinmarketcap.com/v2/listings/').json()
+    if isinstance(ids, list):        
+        for key,asset in enumerate(ids):
+            for value in r['data']:
+                if value['symbol']==asset:
+                    work[asset]=value['id']
+        for key,asset in work.items():
+            r = get('https://api.coinmarketcap.com/v2/ticker/'+str(asset), {'convert':convert}).json()
+            result.append({key:r['data']['quotes']['USD']['price']})
+    return result
+
+def getAssetsFromMySQL():
+    query = "SELECT id, asset_id, symbol FROM p2pbridge_assets WHERE ACTIVE='Y'"
+    cursor.execute(query)
+    assets = cursor.fetchall()
+    pairs=[]
+    for i in range(len(assets)-1):
+        item = assets.pop(0)
+        for value in assets:
+            base=item[1] if (item[1].strip() and item[1]!='0') else item[2]
+            quote=value[1] if (value[1].strip() and value[1]!='0') else value[2]
+            pairs.append((base,quote))
+
+#getDataFromCoinmarketcap()
+asddd = getDataFromCoinmarketcap(assets['coinmarketcap'])
+print(asddd)
+for asset in assets['bitshares']:
+    getDataFromBitshares(('USD', asset))
+
 #print('\n'.join(pairs))
-#noname('USD','BTS')
-#noname('RUB','BTS')
-#noname('UsSD','BTS')
 
 #query = "SELECT datetime, base, base_amount, quote, quote_amount, price FROM courses"
 #cursor.execute(query)

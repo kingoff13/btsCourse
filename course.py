@@ -4,48 +4,18 @@ from requests import get
 import time
 import os
 import yaml
-import mysql.connector
-from mysql.connector import errorcode
 from pprint import pprint
+from init import DBDriver
 
-#sql_map:
-TABLES = {}
-TABLES['p2pbridge_exchange_rates'] = (
-        "CREATE TABLE `p2pbridge_exchange_rates` ("
-	"`ID` INT(11) NOT NULL AUTO_INCREMENT,"
-	"`SOURCE` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-	"`DATE` DATE NOT NULL,"
-	"`ASSET1` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-	"`ASSET2` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-	"`VALUE` DOUBLE NOT NULL,"
-	"PRIMARY KEY (`ID`))"
-"COLLATE='utf8_unicode_ci',"
-"ENGINE=InnoDB,"
-"AUTO_INCREMENT=27")
+#sudo docker run -p 3306:3306 --name mysql-server -e MYSQL_ROOT_PASSWORD=notalchemy -d mysql:latest
+#sudo docker container start mysql-server
 
-'''
-  "CREATE TABLE `courses` ("
-  "  `id` int NOT NULL AUTO_INCREMENT,"
-  "  `datetime` datetime NOT NULL,"
-  "  `base` VARCHAR(255) NOT NULL,"
-  "  `base_id` INT,"
-  "  `base_amount` double NOT NULL,"
-  "  `quote` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-  "  `quote_id` INT,"
-  "  `quote_amount` double NOT NULL,"
-  "  `price` double NOT NULL,"
-  "  PRIMARY KEY (`id`)," 
-  "  INDEX (base_id),"
-  "  INDEX (quote_id),"
-  "  FOREIGN KEY (base_id) REFERENCES p2pbridge_assets (id) ON DELETE RESTRICT ON UPDATE CASCADE,"
-  "  FOREIGN KEY (quote_id) REFERENCES p2pbridge_assets (id) ON DELETE RESTRICT ON UPDATE CASCADE"
-  ") ENGINE=InnoDB")
-'''
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 with open('app.conf') as f:
   conf = yaml.safe_load(f.read())
 sql_conf=conf.get('sql')
 assets = conf.get('assets')
+dbConnector = DBDriver(sql_conf)
 
 def formQuery(arTrades):
     result_query=''
@@ -76,59 +46,18 @@ def gettrades(market, start=False, stop=False):
         trades = market.trades(limit=100, start=stop-step, stop=stop)
         if len(trades)<100:
             stop=stop-step
-            #print(time.strftime('%Y.%m.%d %X', time.localtime(stop)), len(trades), step, '*2')
+            print(time.strftime('%Y.%m.%d %X', time.localtime(stop)), len(trades), step, '*2')
             step=step*2
             result.extend(trades)
         elif len(trades)==100:
-            #print(time.strftime('%Y.%m.%d %X', time.localtime(stop)), len(trades), step, '/2')
+            print(time.strftime('%Y.%m.%d %X', time.localtime(stop)), len(trades), step, '/2')
             step=step/2
             if step<1:
                 stop=stop-1
     trades = market.trades(limit=100, start=start+1, stop=stop)
     result.extend(trades)
     return result
- 
-#sudo docker run -p 3306:3306 --name mysql-server -e MYSQL_ROOT_PASSWORD=notalchemy -d mysql:latest
-#sudo docker container start mysql-server
 
-########Data base connect######################
-cnx = mysql.connector.connect(user=sql_conf['username'], password=sql_conf['password'], host=sql_conf['host'])#, database=sql_conf['db'])
-cursor = cnx.cursor()
-###############################################
-
-#######Data base create if not exist###########
-def create_database(cursor, dbname):
-    try:
-        cursor.execute(
-            "CREATE DATABASE {} DEFAULT CHARACTER SET 'utf8'".format(dbname))
-    except mysql.connector.Error as err:
-        print("Failed creating database: {}".format(err))
-        exit(1)
-
-try:
-    cnx.database = sql_conf['db']
-except mysql.connector.Error as err:
-    if err.errno == mysql.connector.errorcode.ER_BAD_DB_ERROR:
-       create_database(sql_conf['db'])
-       cnx.database = sql_conf['db']
-    else:
-       print(err)
-       exit(1)
-###############################################
-
-#######Tables create if not exist#############
-for name, ddl in TABLES.items():
-    try:
-        print("Creating table {}: ".format(name), end='')
-        cursor.execute(ddl)
-    except mysql.connector.Error as err:
-        if err.errno == mysql.connector.errorcode.ER_TABLE_EXISTS_ERROR:
-            print("already exists.")
-        else:
-            print(err.msg)
-    else:
-        print("OK")
-##############################################
 def getDataFromBitshares(pair):
     try:
         market = Market("{}:{}".format(pair[0], pair[1]))
@@ -137,21 +66,22 @@ def getDataFromBitshares(pair):
         print("{}:{}".format(pair[0], pair[1]) + "notexist")
         return
     query = "SELECT datetime FROM courses WHERE base='{}' AND quote='{}' ORDER BY id DESC LIMIT 1".format(pair[0], pair[1])
-    cursor.execute(query)
-    values = cursor.fetchall()
+    dbConnector.cursor.execute(query)
+    values = dbConnector.cursor.fetchall()
     if len(values)>0: time_last_deal = values[0][0].isoformat()
     else: time_last_deal = time.strftime('%Y-%m-%dT%X',time.localtime(time.time() - 259200))
     result = gettrades(market, time_last_deal)
     if len(result)>0:
         query = formQuery(result)
-        cursor.execute(query)
-        cnx.commit()
+        dbConnector.cursor.execute(query)
+        dbConnector.cnx.commit()
+        print('done')
 
 def getDataFromCoinmarketcap(ids, convert=False):
     result=[]
     work={}
     r = get('https://api.coinmarketcap.com/v2/listings/').json()
-    if isinstance(ids, list):        
+    if isinstance(ids, list):
         for key,asset in enumerate(ids):
             for value in r['data']:
                 if value['symbol']==asset:
@@ -163,8 +93,8 @@ def getDataFromCoinmarketcap(ids, convert=False):
 
 def getAssetsFromMySQL():
     query = "SELECT id, asset_id, symbol FROM p2pbridge_assets WHERE ACTIVE='Y'"
-    cursor.execute(query)
-    assets = cursor.fetchall()
+    dbConnector.cursor.execute(query)
+    assets = dbConnector.cursor.fetchall()
     pairs=[]
     for i in range(len(assets)-1):
         item = assets.pop(0)
@@ -174,8 +104,8 @@ def getAssetsFromMySQL():
             pairs.append((base,quote))
 
 #getDataFromCoinmarketcap()
-asddd = getDataFromCoinmarketcap(assets['coinmarketcap'])
-print(asddd)
+dataCMC = getDataFromCoinmarketcap(assets['coinmarketcap'])
+print(dataCMC)
 for asset in assets['bitshares']:
     getDataFromBitshares(('USD', asset))
 
@@ -190,5 +120,5 @@ for asset in assets['bitshares']:
 #pprint(globals())
 
 #print(cursor.fetchall()[0][0].timestamp())
-cursor.close()
-cnx.close()
+dbConnector.cursor.close()
+dbConnector.cnx.close()

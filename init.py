@@ -58,6 +58,21 @@ def findFillOrdersInBlock(block):
         print(block['block_num'])
 
 class DBDriver:
+    #sql_map:
+    __tables = {}
+    __tables['p2pbridge_exchange_rates'] = (
+            "CREATE TABLE `p2pbridge_exchange_rates` ("
+        "`ID` INT(11) NOT NULL AUTO_INCREMENT,"
+        "`SOURCE` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
+        "`DATETIME` DATETIME NOT NULL,"
+        "`ASSET1` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
+        "`ASSET2` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
+        "`VALUE` DOUBLE NOT NULL,"
+        "PRIMARY KEY (`ID`))"
+    "COLLATE='utf8_unicode_ci',"
+    "ENGINE=InnoDB,"
+    "AUTO_INCREMENT=27")
+
     def __init__(self, sql_conf):
             # Set options
         self.__username = sql_conf['username']
@@ -72,6 +87,7 @@ class DBDriver:
             # , database = self.__database
         self.cursor = self.cnx.cursor()
         self.__set_database()
+        self.__create_table()
 
     def __getYamlSettings(self):
         pass
@@ -88,7 +104,7 @@ class DBDriver:
                 exit(1)
 
     def __create_table(self):
-        for name, ddl in self.tables.items():
+        for name, ddl in self.__tables.items():
             try:
                 print("Creating table {}: ".format(name), end='')
                 self.cursor.execute(ddl)
@@ -108,20 +124,6 @@ class DBDriver:
             print("Failed creating database: {}".format(err))
             exit(1)
 
-    #sql_map:
-    __tables = {}
-    __tables['p2pbridge_exchange_rates'] = (
-            "CREATE TABLE `p2pbridge_exchange_rates` ("
-        "`ID` INT(11) NOT NULL AUTO_INCREMENT,"
-        "`SOURCE` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-        "`DATE` DATE NOT NULL,"
-        "`ASSET1` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-        "`ASSET2` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-        "`VALUE` DOUBLE NOT NULL,"
-        "PRIMARY KEY (`ID`))"
-    "COLLATE='utf8_unicode_ci',"
-    "ENGINE=InnoDB,"
-    "AUTO_INCREMENT=27")
 
 '''
   "CREATE TABLE `courses` ("

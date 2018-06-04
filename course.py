@@ -28,7 +28,7 @@ def formQuery(arQuery):
         # values = "('{time}', '{base_lit}', {base_amount}, '{quote_lit}', {quote_amount}, {price}), ".format(**trade)
         values = "('{}', '{}', '{}', '{}', {}), ".format(
             trade['source'],
-            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time()+18000)),
             trade['base'],
             trade['quote'],
             trade['value'])
@@ -125,7 +125,7 @@ def getAssetsFromMySQL():
 
 
 def process_loop(check_interval=300):
-    while True:
+    #while True:
         dbConnector = DBDriver(sql_conf)
         dataCourses = []
         for asset in asset_ids:
@@ -133,16 +133,22 @@ def process_loop(check_interval=300):
                 a = getDataFromCoinmarketcap(asset['coinmarketcap_id'])
                 a.update({'base': 292, 'quote': asset['id']})
                 dataCourses.append(a)
+                a = getDataFromCoinmarketcap(asset['coinmarketcap_id'], 'BTS')
+                a.update({'base': 212, 'quote': asset['id']})
+                dataCourses.append(a)
             if asset['asset_id'] != 0 and asset['blockchain_id'] == 1:
                 a = getDataFromBitshares(asset['asset_id'])
                 a.update({'base': 292, 'quote': asset['id']})
+                dataCourses.append(a)
+                a = getDataFromBitshares(asset['asset_id'], 'BTS')
+                a.update({'base': 212, 'quote': asset['id']})
                 dataCourses.append(a)
         query = formQuery(dataCourses)
         dbConnector.cursor.execute(query)
         dbConnector.cnx.commit()
         dbConnector.cursor.close()
         dbConnector.cnx.close()
-        time.sleep(check_interval)
+        #time.sleep(check_interval)
 
 asset_ids = getAssetsFromMySQL()
 process_loop(check_interval)

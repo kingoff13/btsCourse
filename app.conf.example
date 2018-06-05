@@ -1,0 +1,8 @@
+sql:
+  host: localhost
+  port: 3306
+  username: user
+  password: password
+  database: database
+
+check_interval: 300

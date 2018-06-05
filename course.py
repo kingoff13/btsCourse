@@ -16,9 +16,12 @@ with open('app.conf') as f:
 sql_conf = conf.get('sql')
 check_interval = conf.get('check_interval', 300)
 
+
 def formQuery(arQuery):
     result_query = ''
-    result_query = result_query + ("INSERT INTO p2pbridge_exchange_rates (SOURCE, DATETIME, ASSET1, ASSET2, VALUE) VALUES ")
+    result_query = result_query + ("INSERT INTO p2pbridge_exchange_rates "
+                                   "(SOURCE, DATETIME, ASSET1, ASSET2, VALUE) "
+                                   "VALUES ")
     for trade in arQuery:
         # if 'inf' in str(trade): continue #print(str(trade))
         # trade['base_amount'] = str(trade['base']).split()[0].replace(',','')
@@ -110,7 +113,9 @@ def getDataFromCoinmarketcap(base, quote='USD'):
 def getAssetsFromMySQL():
     dbConnector = DBDriver(sql_conf)
     result = []
-    query = "SELECT ID, ASSET_ID, SYMBOL, COINMARKETCAP_ID, BLOCKCHAIN_ID FROM p2pbridge_assets WHERE ACTIVE='Y' AND NOT ASSET_ID=0"
+    query = ("SELECT ID, ASSET_ID, SYMBOL, COINMARKETCAP_ID, BLOCKCHAIN_ID "
+             "FROM p2pbridge_assets "
+             "WHERE MONITOR='Y'")
     dbConnector.cursor.execute(query)
     assets = dbConnector.cursor.fetchall()
     for asset in assets:
@@ -125,30 +130,41 @@ def getAssetsFromMySQL():
 
 
 def process_loop(check_interval=300):
-    #while True:
+    while True:
         dbConnector = DBDriver(sql_conf)
         dataCourses = []
         for asset in asset_ids:
             if isinstance(asset['coinmarketcap_id'], int):
-                a = getDataFromCoinmarketcap(asset['coinmarketcap_id'])
+                a = getDataFromCoinmarketcap(asset['coinmarketcap_id'], 'USD')
                 a.update({'base': 292, 'quote': asset['id']})
                 dataCourses.append(a)
                 a = getDataFromCoinmarketcap(asset['coinmarketcap_id'], 'BTS')
                 a.update({'base': 212, 'quote': asset['id']})
                 dataCourses.append(a)
-            if asset['asset_id'] != 0 and asset['blockchain_id'] == 1:
-                a = getDataFromBitshares(asset['asset_id'])
-                a.update({'base': 292, 'quote': asset['id']})
+                a = getDataFromCoinmarketcap(asset['coinmarketcap_id'], 'KRM')
+                a.update({'base': 296, 'quote': asset['id']})
+                dataCourses.append(a)
+            if (
+                asset['asset_id'].strip() and
+                asset['asset_id'] != '0' and
+                asset['blockchain_id'] == 1
+            ):
+                a = getDataFromBitshares(asset['asset_id'], 'USD')
+                a.update({'base': 230, 'quote': asset['id']})
                 dataCourses.append(a)
                 a = getDataFromBitshares(asset['asset_id'], 'BTS')
                 a.update({'base': 212, 'quote': asset['id']})
+                dataCourses.append(a)
+                a = getDataFromBitshares(asset['asset_id'], 'RUDEX.KRM')
+                a.update({'base': 296, 'quote': asset['id']})
                 dataCourses.append(a)
         query = formQuery(dataCourses)
         dbConnector.cursor.execute(query)
         dbConnector.cnx.commit()
         dbConnector.cursor.close()
         dbConnector.cnx.close()
-        #time.sleep(check_interval)
+        time.sleep(check_interval)
+
 
 asset_ids = getAssetsFromMySQL()
 process_loop(check_interval)

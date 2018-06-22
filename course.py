@@ -29,7 +29,7 @@ def formQuery(arQuery):
         # trade['quote_amount'] = str(trade['quote']).split()[0].replace(',','')
         # trade['quote_lit'] = str(trade['quote']).split()[1]
         # values = "('{time}', '{base_lit}', {base_amount}, '{quote_lit}', {quote_amount}, {price}), ".format(**trade)
-        values = "('{}', '{}', '{}', '{}', {}), ".format(
+        values = "('{}', '{}', '{}', '{}', {}, '{}'), ".format(
             trade['source'],
             time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time()+18000)),
             trade['base'],
@@ -136,7 +136,7 @@ def process_loop(check_interval=300):
         dbConnector = DBDriver(sql_conf)
         dataCourses = []
         for asset in asset_ids:
-            if isinstance(asset['coinmarketcap_id'], int):
+            if (isinstance(asset['coinmarketcap_id'], int) and asset['coinmarketcap_id']!=0):
                 a = getDataFromCoinmarketcap(asset['coinmarketcap_id'], 'USD')
                 a.update({'base': 292, 'quote': asset['id']})
                 dataCourses.append(a)

@@ -114,9 +114,10 @@ def getDataFromCoinmarketcap(base, quote='USD'):
 def getAssetsFromMySQL():
     dbConnector = DBDriver(sql_conf)
     result = []
-    query = ("SELECT ID, ASSET_ID, SYMBOL, COINMARKETCAP_ID, BLOCKCHAIN_ID "
-             "FROM p2pbridge_assets "
-             "WHERE MONITOR='Y'")
+    query = ("SELECT p2pbridge_assets.ID, p2pbridge_assets.ASSET_ID, p2pbridge_assets.SYMBOL, p2pbridge_assets.COINMARKETCAP_ID, p2pbridge_assets_type_blockchain.BLOCKCHAIN_ID "
+             "FROM p2pbridge_assets LEFT JOIN p2pbridge_assets_type_blockchain "
+             "ON p2pbridge_assets.ID=p2pbridge_assets_type_blockchain.ASSET_ID "
+             "WHERE p2pbridge_assets.MONITOR='Y'")
     dbConnector.cursor.execute(query)
     assets = dbConnector.cursor.fetchall()
     for asset in assets:

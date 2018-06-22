@@ -20,7 +20,7 @@ check_interval = conf.get('check_interval', 300)
 def formQuery(arQuery):
     result_query = ''
     result_query = result_query + ("INSERT INTO p2pbridge_exchange_rates "
-                                   "(SOURCE, DATETIME, ASSET1, ASSET2, VALUE) "
+                                   "(SOURCE, DATETIME, ASSET1, ASSET2, VALUE, ACTIVE) "
                                    "VALUES ")
     for trade in arQuery:
         # if 'inf' in str(trade): continue #print(str(trade))
@@ -34,7 +34,8 @@ def formQuery(arQuery):
             time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time()+18000)),
             trade['base'],
             trade['quote'],
-            trade['value'])
+            trade['value'],
+            'Y')
         result_query += values
     result_query = result_query.rstrip(', ')
     return result_query
@@ -158,6 +159,9 @@ def process_loop(check_interval=300):
                 a = getDataFromBitshares(asset['asset_id'], 'RUDEX.KRM')
                 a.update({'base': 296, 'quote': asset['id']})
                 dataCourses.append(a)
+        query = "UPDATE p2pbridge_exchange_rates SET ACTIVE='N' WHERE ACTIVE='Y'"
+        dbConnector.cursor.execute(query)
+        dbConnector.cnx.commit()
         query = formQuery(dataCourses)
         dbConnector.cursor.execute(query)
         dbConnector.cnx.commit()

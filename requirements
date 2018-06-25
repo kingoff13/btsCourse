@@ -4,3 +4,4 @@ bitshares
 #pyfcm
 pyyaml
 mysql-connector-python
+lxml

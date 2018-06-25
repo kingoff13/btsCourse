@@ -1,6 +1,7 @@
 from bitshares.market import Market
 from bitshares import exceptions as BTSExceptions
 from requests import get
+from lxml import objectify
 import time
 import os
 import yaml
@@ -110,6 +111,55 @@ def getDataFromCoinmarketcap(base, quote='USD'):
                'value': r['data']['quotes'][quote]['price']})
     return result
 
+def getDataFromCBR():
+    f = get('http://www.cbr.ru/scripts/XML_daily.asp')
+    xmltest = objectify.fromstring(f.content)
+    result = []
+    for valute in xmltest.Valute:
+        if valute.CharCode == 'USD': result.append({
+            'source': 'CBR',
+            'base': 291,
+            'quote': 292,
+            'value': valute.Value
+        })
+        if valute.CharCode == 'EUR': result.append({
+            'source': 'CBR',
+            'base': 291,
+            'quote': 294,
+            'value': valute.Value
+        })
+        if valute.CharCode == 'CNY': result.append({
+            'source': 'CBR',
+            'base': 291,
+            'quote': 295,
+            'value': valute.Value
+        })
+    return result
+
+def getDataFromMoex():
+    f = get('https://iss.moex.com/iss/engines/currency/markets/selt/boards/cets/securities.xml?securities=USD000000TOD,EUR_RUB__TOM,CNYRUB_TOM,EURUSD000TOM')
+    xmltest = objectify.fromstring(f.content)
+    result = []
+    for row in xmltest.data[1].rows.row:
+        if row.attrib['SECID'] == 'USD000000TOD': result.append({
+            'source': 'MOEX',
+            'base': 291,
+            'quote': 292,
+            'value': row.attrib['LAST']
+        })
+        if row.attrib['SECID'] == 'EUR_RUB__TOM': result.append({
+            'source': 'MOEX',
+            'base': 291,
+            'quote': 292,
+            'value': row.attrib['LAST']
+        })
+        if row.attrib['SECID'] == 'CNYRUB_TOM': result.append({
+            'source': 'MOEX',
+            'base': 291,
+            'quote': 292,
+            'value': row.attrib['LAST']
+        })
+    return result
 
 def getAssetsFromMySQL():
     dbConnector = DBDriver(sql_conf)
@@ -160,6 +210,10 @@ def process_loop(check_interval=300):
                 a = getDataFromBitshares(asset['asset_id'], 'RUDEX.KRM')
                 a.update({'base': 296, 'quote': asset['id']})
                 dataCourses.append(a)
+        a = getDataFromCBR()
+        dataCourses.extend(a)
+        a = getDataFromMoex()
+        dataCourses.extend(a)
         query = "UPDATE p2pbridge_exchange_rates SET ACTIVE='N' WHERE ACTIVE='Y'"
         dbConnector.cursor.execute(query)
         dbConnector.cnx.commit()

@@ -86,7 +86,7 @@ def gettrades(market, start=False, stop=False):
         course = 0
     base_lit = market['base']['symbol']
     quote_lit = market['quote']['symbol']
-    return {'source': 'Bitshares',
+    return {'source': 'bts',
             'base': base_lit,
             'quote': quote_lit,
             'value': course}
@@ -105,7 +105,7 @@ def getDataFromBitshares(base, quote='USD'):
 def getDataFromCoinmarketcap(base, quote='USD'):
     r = get('https://api.coinmarketcap.com/v2/ticker/'+str(base),
             {'convert': quote}).json()
-    result = ({'source': 'Coinmarketcap',
+    result = ({'source': 'cmc',
                'base': quote,
                'quote': r['data']['symbol'],
                'value': r['data']['quotes'][quote]['price']})
@@ -117,22 +117,22 @@ def getDataFromCBR():
     result = []
     for valute in xmltest.Valute:
         if valute.CharCode == 'USD': result.append({
-            'source': 'CBR',
+            'source': 'cbrf',
             'base': 291,
             'quote': 292,
-            'value': valute.Value
+            'value': float(str(valute.Value).replace(',','.'))
         })
         if valute.CharCode == 'EUR': result.append({
-            'source': 'CBR',
+            'source': 'cbrf',
             'base': 291,
             'quote': 294,
-            'value': valute.Value
+            'value': float(str(valute.Value).replace(',','.'))
         })
         if valute.CharCode == 'CNY': result.append({
-            'source': 'CBR',
+            'source': 'cbrf',
             'base': 291,
             'quote': 295,
-            'value': valute.Value
+            'value': float(str(valute.Value).replace(',','.'))/10
         })
     return result
 
@@ -142,22 +142,22 @@ def getDataFromMoex():
     result = []
     for row in xmltest.data[1].rows.row:
         if row.attrib['SECID'] == 'USD000000TOD': result.append({
-            'source': 'MOEX',
+            'source': 'mmvb',
             'base': 291,
             'quote': 292,
-            'value': row.attrib['LAST']
+            'value': float(row.attrib['LAST'])
         })
         if row.attrib['SECID'] == 'EUR_RUB__TOM': result.append({
-            'source': 'MOEX',
+            'source': 'mmvb',
             'base': 291,
-            'quote': 292,
-            'value': row.attrib['LAST']
+            'quote': 294,
+            'value': float(row.attrib['LAST'])
         })
         if row.attrib['SECID'] == 'CNYRUB_TOM': result.append({
-            'source': 'MOEX',
+            'source': 'mmvb',
             'base': 291,
-            'quote': 292,
-            'value': row.attrib['LAST']
+            'quote': 295,
+            'value': float(row.attrib['LAST'])
         })
     return result
 

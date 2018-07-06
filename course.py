@@ -20,8 +20,8 @@ check_interval = conf.get('check_interval', 300)
 
 def formQuery(arQuery):
     result_query = ''
-    result_query = result_query + ("INSERT INTO p2pbridge_exchange_rates "
-                                   "(SOURCE, DATETIME, ASSET1, ASSET2, VALUE, ACTIVE) "
+    result_query = result_query + ("INSERT INTO p2pbridge_exchange_rates_values "
+                                   "(RATE_ID, DATETIME, VALUE, ACTIVE) "
                                    "VALUES ")
     for trade in arQuery:
         # if 'inf' in str(trade): continue #print(str(trade))
@@ -30,11 +30,9 @@ def formQuery(arQuery):
         # trade['quote_amount'] = str(trade['quote']).split()[0].replace(',','')
         # trade['quote_lit'] = str(trade['quote']).split()[1]
         # values = "('{time}', '{base_lit}', {base_amount}, '{quote_lit}', {quote_amount}, {price}), ".format(**trade)
-        values = "('{}', '{}', '{}', '{}', {}, '{}'), ".format(
-            trade['source'],
+        values = "({}, '{}', {}, '{}'), ".format(
+            trade['rate_id'],
             time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time()+18000)),
-            trade['base'],
-            trade['quote'],
             trade['value'],
             'Y')
         result_query += values
@@ -86,10 +84,7 @@ def gettrades(market, start=False, stop=False):
         course = 0
     base_lit = market['base']['symbol']
     quote_lit = market['quote']['symbol']
-    return {'source': 'bts',
-            'base': base_lit,
-            'quote': quote_lit,
-            'value': course}
+    return {'value': course}
 
 
 def getDataFromBitshares(base, quote='USD'):
@@ -105,10 +100,7 @@ def getDataFromBitshares(base, quote='USD'):
 def getDataFromCoinmarketcap(base, quote='USD'):
     r = get('https://api.coinmarketcap.com/v2/ticker/'+str(base),
             {'convert': quote}).json()
-    result = ({'source': 'cmc',
-               'base': quote,
-               'quote': r['data']['symbol'],
-               'value': r['data']['quotes'][quote]['price']})
+    result = ({'value': r['data']['quotes'][quote]['price']})
     return result
 
 def getDataFromCBR():
@@ -117,21 +109,15 @@ def getDataFromCBR():
     result = []
     for valute in xmltest.Valute:
         if valute.CharCode == 'USD': result.append({
-            'source': 'cbrf',
-            'base': 291,
-            'quote': 292,
+            'rate_id': 'cbrf',
             'value': float(str(valute.Value).replace(',','.'))
         })
         if valute.CharCode == 'EUR': result.append({
-            'source': 'cbrf',
-            'base': 291,
-            'quote': 294,
+            'rate_id': 'cbrf',
             'value': float(str(valute.Value).replace(',','.'))
         })
         if valute.CharCode == 'CNY': result.append({
-            'source': 'cbrf',
-            'base': 291,
-            'quote': 295,
+            'rate_id': 'cbrf',
             'value': float(str(valute.Value).replace(',','.'))/10
         })
     return result
@@ -142,30 +128,63 @@ def getDataFromMoex():
     result = []
     for row in xmltest.data[1].rows.row:
         if row.attrib['SECID'] == 'USD000000TOD': result.append({
-            'source': 'mmvb',
-            'base': 291,
-            'quote': 292,
+            'rate_id': 'mmvb',
             'value': float(row.attrib['LAST'])
         })
         if row.attrib['SECID'] == 'EUR_RUB__TOM': result.append({
-            'source': 'mmvb',
-            'base': 291,
-            'quote': 294,
+            'rate_id': 'mmvb',
             'value': float(row.attrib['LAST'])
         })
         if row.attrib['SECID'] == 'CNYRUB_TOM': result.append({
-            'source': 'mmvb',
-            'base': 291,
-            'quote': 295,
+            'rate_id': 'mmvb',
             'value': float(row.attrib['LAST'])
         })
     return result
 
+def getBtsRatesFromMySQL():
+    dbConnector = DBDriver(sql_conf)
+    result = []
+    query = ("SELECT "
+             "rates.ID, "
+             "rates.SOURCE, "
+             "base_assets.ASSET_ID AS BASE_BTS_ID, "
+             "base_assets.COINMARKETCAP_ID AS BASE_CMC_ID, "
+             "base_assets.COINMARKETCAP_CODE AS BASE_CMC_CODE, "
+             "quote_assets.ASSET_ID AS QUOTE_BTS_ID, "
+             "quote_assets.COINMARKETCAP_ID AS QUOTE_CMC_ID, "
+             "quote_assets.COINMARKETCAP_CODE AS QUOTE_CMC_CODE "
+             "FROM p2pbridge_exchange_rates_meta AS rates "
+             "LEFT JOIN p2pbridge_assets base_assets "
+             "ON rates.BASE_ASSET_ID=base_assets.ID "
+             "LEFT JOIN p2pbridge_assets quote_assets "
+             "ON rates.QOUTE_ASSET_ID=quote_assets.ID")
+    dbConnector.cursor.execute(query)
+    rates = dbConnector.cursor.fetchall()
+    for rate in rates:
+        result.append({'id': rate[0],
+                       'source': rate[1],
+                       'base_id_bts': rate[2],
+                       'base_id_cmc': rate[3],
+                       'base_code_cmc': rate[4],
+                       'quote_id_bts': rate[5],
+                       'quote_id_cmc': rate[6],
+                       'quote_code_cmc': rate[7]})
+    dbConnector.cursor.close()
+    dbConnector.cnx.close()
+    return result
+
+
 def getAssetsFromMySQL():
     dbConnector = DBDriver(sql_conf)
     result = []
-    query = ("SELECT p2pbridge_assets.ID, p2pbridge_assets.ASSET_ID, p2pbridge_assets.SYMBOL, p2pbridge_assets.COINMARKETCAP_ID, p2pbridge_assets_type_blockchain.BLOCKCHAIN_ID "
-             "FROM p2pbridge_assets LEFT JOIN p2pbridge_assets_type_blockchain "
+    query = ("SELECT "
+             "p2pbridge_assets.ID, "
+             "p2pbridge_assets.ASSET_ID, "
+             "p2pbridge_assets.SYMBOL, "
+             "p2pbridge_assets.COINMARKETCAP_ID, "
+             "p2pbridge_assets_type_blockchain.BLOCKCHAIN_ID "
+             "FROM p2pbridge_assets "
+             "LEFT JOIN p2pbridge_assets_type_blockchain "
              "ON p2pbridge_assets.ID=p2pbridge_assets_type_blockchain.ASSET_ID "
              "WHERE p2pbridge_assets.MONITOR='Y'")
     dbConnector.cursor.execute(query)
@@ -224,6 +243,28 @@ def process_loop(check_interval=300):
         dbConnector.cnx.close()
         time.sleep(check_interval)
 
-
-asset_ids = getAssetsFromMySQL()
-process_loop(check_interval)
+def process_loop2(check_interval=300):
+    dbConnector = DBDriver(sql_conf)
+    dataCourses = []
+    for rate in rates_ids:
+        if rate['source']=='bitshares':
+            a = getDataFromBitshares(rate['base_id_bts'], rate['quote_id_bts'])
+            a.update({'rate_id': rate['id']})
+            dataCourses.append(a)
+        if rate['source']=='coinmarketcup':
+            a = getDataFromCoinmarketcap(rate['base_id_cmc'], rate['quote_code_cmc'])
+            a.update({'rate_id': rate['id']})
+            dataCourses.append(a)
+    query = "UPDATE p2pbridge_exchange_rates SET ACTIVE='N' WHERE ACTIVE='Y'"
+    dbConnector.cursor.execute(query)
+    dbConnector.cnx.commit()
+    query = formQuery(dataCourses)
+    dbConnector.cursor.execute(query)
+    dbConnector.cnx.commit()
+    dbConnector.cursor.close()
+    dbConnector.cnx.close()
+#asset_ids = getAssetsFromMySQL()
+rates_ids = getBtsRatesFromMySQL()
+print(process_loop2())
+#process_loop(check_interval)
+print('Hello')

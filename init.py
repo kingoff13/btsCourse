@@ -68,6 +68,31 @@ class DBDriver:
         "`ASSET1` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
         "`ASSET2` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
         "`VALUE` DOUBLE NOT NULL,"
+        "`ACTIVE` varchar(50) COLLATE utf8_unicode_ci DEFAULT 'N',"
+        "PRIMARY KEY (`ID`))"
+    "COLLATE='utf8_unicode_ci',"
+    "ENGINE=InnoDB,"
+    "AUTO_INCREMENT=27")
+
+    __tables['p2pbridge_exchange_rates_meta'] = (
+            "CREATE TABLE `p2pbridge_exchange_rates_meta` ("
+        "`ID` INT(11) NOT NULL AUTO_INCREMENT,"
+        "`SOURCE` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
+        "`BASE_ASSET_ID` INT(11),"
+        "`QOUTE_ASSET_ID` INT(11),"
+        "`ACTIVE` varchar(50) COLLATE utf8_unicode_ci DEFAULT 'N',"
+        "PRIMARY KEY (`ID`))"
+    "COLLATE='utf8_unicode_ci',"
+    "ENGINE=InnoDB,"
+    "AUTO_INCREMENT=27")
+
+    __tables['p2pbridge_exchange_rates_values'] = (
+            "CREATE TABLE `p2pbridge_exchange_rates_values` ("
+        "`ID` INT(11) NOT NULL AUTO_INCREMENT,"
+        "`RATE_ID` INT(11),"
+        "`DATETIME` DATETIME NOT NULL,"
+        "`VALUE` DOUBLE NOT NULL,"
+        "`ACTIVE` varchar(1) COLLATE utf8_unicode_ci DEFAULT 'N',"
         "PRIMARY KEY (`ID`))"
     "COLLATE='utf8_unicode_ci',"
     "ENGINE=InnoDB,"

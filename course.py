@@ -17,6 +17,44 @@ with open('app.conf') as f:
 sql_conf = conf.get('sql')
 check_interval = conf.get('check_interval', 300)
 
+__CbrfMoexAssocTable = {
+    'USD' : {
+        'CBRF' : {
+            'NAME' : 'USD',
+            'PREC' : 1
+        },
+        'MOEX' : {
+            'NAME' : 'USD000000TOD'
+        }
+    },
+    'CNY' : {
+        'CBRF' : {
+            'NAME' : 'CNY',
+            'PREC' : 10
+        },
+        'MOEX' : {
+            'NAME' : 'CNYRUB_TOM'
+        }
+    },
+    'EUR' : {
+        'CBRF' : {
+            'NAME' : 'EUR',
+            'PREC' : 1
+        },
+        'MOEX' : {
+            'NAME' : 'EUR_RUB__TOM'
+        }
+    },
+    'EURO' : {
+        'CBRF' : {
+            'NAME' : 'EUR',
+            'PREC' : 1
+        },
+        'MOEX' : {
+            'NAME' : 'EUR_RUB__TOM'
+        }
+    }
+}
 
 def formQuery(arQuery):
     result_query = ''
@@ -91,7 +129,7 @@ def getDataFromBitshares(base, quote='USD'):
     return gettrades(market)
 
 
-def getDataFromCoinmarketcap(base, quote='USD'):
+def getDataFromCoinmarketcapy(base, quote='USD'):
     r = get('https://api.coinmarketcap.com/v2/ticker/'+str(base),
             {'convert': quote}).json()
     try:
@@ -101,52 +139,41 @@ def getDataFromCoinmarketcap(base, quote='USD'):
         return
     return result
 
-def getDataFromCBR():
-    f = get('http://www.cbr.ru/scripts/XML_daily.asp')
-    xmltest = objectify.fromstring(f.content)
-    result = []
-    for valute in xmltest.Valute:
-        if valute.CharCode == 'USD': result.append({
-            'rate_id': 'cbrf',
-            'value': float(str(valute.Value).replace(',','.'))
-        })
-        if valute.CharCode == 'EUR': result.append({
-            'rate_id': 'cbrf',
-            'value': float(str(valute.Value).replace(',','.'))
-        })
-        if valute.CharCode == 'CNY': result.append({
-            'rate_id': 'cbrf',
-            'value': float(str(valute.Value).replace(',','.'))/10
-        })
-    return result
+def getDataFromCBR(base, quote='USD'):
+    if (base=='RUB' or base=='RUR') and __CbrfMoexAssocTable[quote]:
+        f = get('http://www.cbr.ru/scripts/XML_daily.asp')
+        xmltest = objectify.fromstring(f.content)
+        result = []
+        for valute in xmltest.Valute:
+            if valute.CharCode == __CbrfMoexAssocTable[quote]['CBRF']['NAME']:
+                return {'value': float(str(valute.Value).replace(',','.'))/__CbrfMoexAssocTable[quote]['CBRF']['PREC']}
+    else:
+        return
 
-def getDataFromMoex():
-    f = get('https://iss.moex.com/iss/engines/currency/markets/selt/boards/cets/securities.xml?securities=USD000000TOD,EUR_RUB__TOM,CNYRUB_TOM,EURUSD000TOM')
-    xmltest = objectify.fromstring(f.content)
-    result = []
-    for row in xmltest.data[1].rows.row:
-        if row.attrib['SECID'] == 'USD000000TOD': result.append({
-            'rate_id': 'mmvb',
-            'value': float(row.attrib['LAST'])
-        })
-        if row.attrib['SECID'] == 'EUR_RUB__TOM': result.append({
-            'rate_id': 'mmvb',
-            'value': float(row.attrib['LAST'])
-        })
-        if row.attrib['SECID'] == 'CNYRUB_TOM': result.append({
-            'rate_id': 'mmvb',
-            'value': float(row.attrib['LAST'])
-        })
-    return result
+def getDataFromMoex(base, quote='USD'):
+    if (base=='RUB' or base=='RUR') and __CbrfMoexAssocTable[quote]:
+        f = get('https://iss.moex.com/iss/engines/currency/markets/selt/boards/cets/securities.xml?securities=USD000000TOD,EUR_RUB__TOM,CNYRUB_TOM,EURUSD000TOM')
+        xmltest = objectify.fromstring(f.content)
+        result = []
+        for row in xmltest.data[1].rows.row:
+            if row.attrib['SECID'] == __CbrfMoexAssocTable[quote]['MOEX']['NAME']:
+                return {
+                'value': float(row.attrib['LAST'])
+            }
+        return result
+    else:
+        return
 
 def getBtsRatesFromMySQL(dbConnector):
     result = []
     query = ("SELECT "
              "rates.ID, "
              "rates.SOURCE, "
+             "base_assets.SYMBOL AS BASE_SYMBOL, "
              "base_assets.ASSET_ID AS BASE_BTS_ID, "
              "base_assets.COINMARKETCAP_ID AS BASE_CMC_ID, "
              "base_assets.COINMARKETCAP_CODE AS BASE_CMC_CODE, "
+             "quote_assets.SYMBOL AS QUOTE_SYMBOL, "
              "quote_assets.ASSET_ID AS QUOTE_BTS_ID, "
              "quote_assets.COINMARKETCAP_ID AS QUOTE_CMC_ID, "
              "quote_assets.COINMARKETCAP_CODE AS QUOTE_CMC_CODE "
@@ -154,18 +181,21 @@ def getBtsRatesFromMySQL(dbConnector):
              "LEFT JOIN p2pbridge_assets base_assets "
              "ON rates.BASE_ASSET_ID=base_assets.ID "
              "LEFT JOIN p2pbridge_assets quote_assets "
-             "ON rates.QUOTE_ASSET_ID=quote_assets.ID")
+             "ON rates.QUOTE_ASSET_ID=quote_assets.ID "
+             "WHERE rates.ACTIVE='Y'")
     dbConnector.cursor.execute(query)
     rates = dbConnector.cursor.fetchall()
     for rate in rates:
         result.append({'id': rate[0],
                        'source': rate[1],
-                       'base_id_bts': rate[2],
-                       'base_id_cmc': rate[3],
-                       'base_code_cmc': rate[4],
-                       'quote_id_bts': rate[5],
-                       'quote_id_cmc': rate[6],
-                       'quote_code_cmc': rate[7]})
+                       'base_symbol': rate[2],
+                       'base_id_bts': rate[3],
+                       'base_id_cmc': rate[4],
+                       'base_code_cmc': rate[5],
+                       'quote_symbol': rate[6],
+                       'quote_id_bts': rate[7],
+                       'quote_id_cmc': rate[8],
+                       'quote_code_cmc': rate[9]})
     return result
 
 
@@ -182,6 +212,16 @@ def process_loop(check_interval=300):
                     dataCourses.append(a)
             if rate['source']=='coinmarketcap':
                 a = getDataFromCoinmarketcap(rate['base_id_cmc'], rate['quote_code_cmc'])
+                if a:
+                    a.update({'rate_id': rate['id']})
+                    dataCourses.append(a)
+            if rate['source']=='cbrf':
+                a = getDataFromCBR(rate['base_symbol'], rate['quote_symbol'])
+                if a:
+                    a.update({'rate_id': rate['id']})
+                    dataCourses.append(a)
+            if rate['source']=='mmvb':
+                a = getDataFromMoex(rate['base_symbol'], rate['quote_symbol'])
                 if a:
                     a.update({'rate_id': rate['id']})
                     dataCourses.append(a)

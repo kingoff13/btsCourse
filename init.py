@@ -79,7 +79,7 @@ class DBDriver:
         "`ID` INT(11) NOT NULL AUTO_INCREMENT,"
         "`SOURCE` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
         "`BASE_ASSET_ID` INT(11),"
-        "`QOUTE_ASSET_ID` INT(11),"
+        "`QUOTE_ASSET_ID` INT(11),"
         "`ACTIVE` varchar(50) COLLATE utf8_unicode_ci DEFAULT 'N',"
         "PRIMARY KEY (`ID`))"
     "COLLATE='utf8_unicode_ci',"

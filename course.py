@@ -139,8 +139,7 @@ def getDataFromMoex():
         })
     return result
 
-def getBtsRatesFromMySQL():
-    dbConnector = DBDriver(sql_conf)
+def getBtsRatesFromMySQL(dbConnector):
     result = []
     query = ("SELECT "
              "rates.ID, "
@@ -155,7 +154,7 @@ def getBtsRatesFromMySQL():
              "LEFT JOIN p2pbridge_assets base_assets "
              "ON rates.BASE_ASSET_ID=base_assets.ID "
              "LEFT JOIN p2pbridge_assets quote_assets "
-             "ON rates.QOUTE_ASSET_ID=quote_assets.ID")
+             "ON rates.QUOTE_ASSET_ID=quote_assets.ID")
     dbConnector.cursor.execute(query)
     rates = dbConnector.cursor.fetchall()
     for rate in rates:
@@ -167,14 +166,13 @@ def getBtsRatesFromMySQL():
                        'quote_id_bts': rate[5],
                        'quote_id_cmc': rate[6],
                        'quote_code_cmc': rate[7]})
-    dbConnector.cursor.close()
-    dbConnector.cnx.close()
     return result
 
 
 def process_loop(check_interval=300):
     while True:
         dbConnector = DBDriver(sql_conf)
+        rates_ids = getBtsRatesFromMySQL(dbConnector )
         dataCourses = []
         for rate in rates_ids:
             if rate['source']=='bitshares':
@@ -182,7 +180,7 @@ def process_loop(check_interval=300):
                 if a:
                     a.update({'rate_id': rate['id']})
                     dataCourses.append(a)
-            if rate['source']=='coinmarketcup':
+            if rate['source']=='coinmarketcap':
                 a = getDataFromCoinmarketcap(rate['base_id_cmc'], rate['quote_code_cmc'])
                 if a:
                     a.update({'rate_id': rate['id']})
@@ -197,5 +195,4 @@ def process_loop(check_interval=300):
         dbConnector.cnx.close()
         time.sleep(check_interval)
 
-rates_ids = getBtsRatesFromMySQL()
 process_loop(check_interval)

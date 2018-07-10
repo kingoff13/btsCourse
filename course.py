@@ -64,7 +64,7 @@ def formQuery(arQuery):
     for trade in arQuery:
         values = "({}, '{}', {}, '{}'), ".format(
             trade['rate_id'],
-            time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time()+18000)),
+            time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time())),
             trade['value'],
             'Y')
         result_query += values
@@ -129,7 +129,7 @@ def getDataFromBitshares(base, quote='USD'):
     return gettrades(market)
 
 
-def getDataFromCoinmarketcapy(base, quote='USD'):
+def getDataFromCoinmarketcap(base, quote='USD'):
     r = get('https://api.coinmarketcap.com/v2/ticker/'+str(base),
             {'convert': quote}).json()
     try:
@@ -156,7 +156,7 @@ def getDataFromMoex(base, quote='USD'):
         xmltest = objectify.fromstring(f.content)
         result = []
         for row in xmltest.data[1].rows.row:
-            if row.attrib['SECID'] == __CbrfMoexAssocTable[quote]['MOEX']['NAME']:
+            if row.attrib['SECID'] == __CbrfMoexAssocTable[quote]['MOEX']['NAME'] and row.attrib['LAST']:
                 return {
                 'value': float(row.attrib['LAST'])
             }

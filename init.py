@@ -60,19 +60,6 @@ def findFillOrdersInBlock(block):
 class DBDriver:
     #sql_map:
     __tables = {}
-    __tables['p2pbridge_exchange_rates'] = (
-            "CREATE TABLE `p2pbridge_exchange_rates` ("
-        "`ID` INT(11) NOT NULL AUTO_INCREMENT,"
-        "`SOURCE` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-        "`DATETIME` DATETIME NOT NULL,"
-        "`ASSET1` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-        "`ASSET2` VARCHAR(255) NOT NULL COLLATE 'utf8_unicode_ci',"
-        "`VALUE` DOUBLE NOT NULL,"
-        "`ACTIVE` varchar(50) COLLATE utf8_unicode_ci DEFAULT 'N',"
-        "PRIMARY KEY (`ID`))"
-    "COLLATE='utf8_unicode_ci',"
-    "ENGINE=InnoDB,"
-    "AUTO_INCREMENT=27")
 
     __tables['p2pbridge_exchange_rates_meta'] = (
             "CREATE TABLE `p2pbridge_exchange_rates_meta` ("

@@ -164,6 +164,16 @@ def getDataFromMoex(base, quote='USD'):
     else:
         return
 
+def getDataFromImf(base, quote='SDR'):
+    f = get('http://www.imf.org/external/np/fin/data/rms_mth.aspx?reportType=CVSDR&tsvflag=Y')
+    for row in f.text.split("\r\n"):
+        values = row.split("\t")
+        if values[0]==base:
+            return {
+                'value': float(values.pop().replace(',',''))
+            }
+    return
+
 def getBtsRatesFromMySQL(dbConnector):
     result = []
     query = ("SELECT "
@@ -222,6 +232,11 @@ def process_loop(check_interval=300):
                     dataCourses.append(a)
             if rate['source']=='mmvb':
                 a = getDataFromMoex(rate['base_symbol'], rate['quote_symbol'])
+                if a:
+                    a.update({'rate_id': rate['id']})
+                    dataCourses.append(a)
+            if rate['source']=='imf':
+                a = getDataFromImf(rate['base_symbol'], rate['quote_symbol'])
                 if a:
                     a.update({'rate_id': rate['id']})
                     dataCourses.append(a)

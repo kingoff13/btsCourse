@@ -33,12 +33,9 @@ class RateValue(Base):
 
     def __init__(self, rate_id, value):
         self.rate_id = rate_id
-        self.datetime = time.strftime(
-            "%Y-%m-%d %H:%M:%S", time.gmtime(time.time())),
+        self.datetime = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time()))
         self.value = value
-        lastvalue = session.query(RateValue).\
-            filter(RateValue.rate_id == rate_id, RateValue.active == 'Y').\
-            update({RateValue.active: 'N'})
+        self.active = 'Y'
 
 
 class Rate(Base):
@@ -80,9 +77,10 @@ class Asset(Base):
     date_create = Column(DateTime)
     commission_in_transaction = Column(Float)
     commission_out_transaction = Column(Float)
+    imf_name = Column(String(100, 'utf8_unicode_ci'))
 
-session = Session()
-ourUser = session.query(Rate).filter_by(id="27").first()
-newOrder = RateValue(69, 111)
-session.add(newOrder)
-session.commit()
+#ourUser = session.query(Rate).all()
+#for each in ourUser:
+#    print(each)
+#newOrder = RateValue(69, 111)
+#session.add(newOrder)

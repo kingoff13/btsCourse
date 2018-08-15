@@ -5,6 +5,8 @@ from lxml import objectify
 import time
 import os
 import yaml
+import traceback
+from models import Rate, RateValue, Session
 from init import DBDriver
 
 # sudo docker run -p 3306:3306 --name mysql-server -e MYSQL_ROOT_PASSWORD=notalchemy -d mysql:latest
@@ -16,6 +18,8 @@ with open('app.conf') as f:
   conf = yaml.safe_load(f.read())
 sql_conf = conf.get('sql')
 check_interval = conf.get('check_interval', 300)
+
+session = Session()
 
 __CbrfMoexAssocTable = {
     'USD' : {
@@ -55,21 +59,6 @@ __CbrfMoexAssocTable = {
         }
     }
 }
-
-def formQuery(arQuery):
-    result_query = ''
-    result_query = result_query + ("INSERT INTO p2pbridge_exchange_rates_values "
-                                   "(RATE_ID, DATETIME, VALUE, ACTIVE) "
-                                   "VALUES ")
-    for trade in arQuery:
-        values = "({}, '{}', {}, '{}'), ".format(
-            trade['rate_id'],
-            time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(time.time())),
-            trade['value'],
-            'Y')
-        result_query += values
-    result_query = result_query.rstrip(', ')
-    return result_query
 
 
 # format time: 'YYYY-MM-DDTHH:MM:SS'
@@ -116,7 +105,7 @@ def gettrades(market, start=False, stop=False):
         course = 0
     base_lit = market['base']['symbol']
     quote_lit = market['quote']['symbol']
-    return {'value': course}
+    return course
 
 
 def getDataFromBitshares(base, quote='USD'):
@@ -133,121 +122,98 @@ def getDataFromCoinmarketcap(base, quote='USD'):
     r = get('https://api.coinmarketcap.com/v2/ticker/'+str(base),
             {'convert': quote}).json()
     try:
-        result = ({'value': r['data']['quotes'][quote]['price']})
+        result = r['data']['quotes'][quote]['price']
     except:
         print("{}:{}".format(base, quote) + "notexist")
         return
     return result
 
 def getDataFromCBR(base, quote='USD'):
-    if (base=='RUB' or base=='RUR') and __CbrfMoexAssocTable[quote]:
+    if (quote=='RUB' or quote=='RUR') and __CbrfMoexAssocTable[base]:
         f = get('http://www.cbr.ru/scripts/XML_daily.asp')
         xmltest = objectify.fromstring(f.content)
         result = []
         for valute in xmltest.Valute:
-            if valute.CharCode == __CbrfMoexAssocTable[quote]['CBRF']['NAME']:
-                return {'value': float(str(valute.Value).replace(',','.'))/__CbrfMoexAssocTable[quote]['CBRF']['PREC']}
+            if valute.CharCode == __CbrfMoexAssocTable[base]['CBRF']['NAME']:
+                return float(str(valute.Value).replace(',','.'))/__CbrfMoexAssocTable[base]['CBRF']['PREC']
     else:
         return
 
 def getDataFromMoex(base, quote='USD'):
-    if (base=='RUB' or base=='RUR') and __CbrfMoexAssocTable[quote]:
+    if (quote=='RUB' or quote=='RUR') and __CbrfMoexAssocTable[base]:
         f = get('https://iss.moex.com/iss/engines/currency/markets/selt/boards/cets/securities.xml?securities=USD000000TOD,EUR_RUB__TOM,CNYRUB_TOM,EURUSD000TOM')
         xmltest = objectify.fromstring(f.content)
-        result = []
         for row in xmltest.data[1].rows.row:
-            if row.attrib['SECID'] == __CbrfMoexAssocTable[quote]['MOEX']['NAME'] and row.attrib['LAST']:
-                return {
-                'value': float(row.attrib['LAST'])
-            }
-        return result
+            if row.attrib['SECID'] == __CbrfMoexAssocTable[base]['MOEX']['NAME'] and row.attrib['LAST']:
+                return float(row.attrib['LAST'])
     else:
         return
 
-def getDataFromImf(base, quote='SDR'):
+def getDataFromImf(quote, base='SDR'):
     f = get('http://www.imf.org/external/np/fin/data/rms_mth.aspx?reportType=CVSDR&tsvflag=Y')
     for row in f.text.split("\r\n"):
         values = row.split("\t")
-        if values[0]==base:
-            return {
-                'value': float(values.pop().replace(',',''))
-            }
+        if values[0]==quote:
+            return float(values.pop().replace(',',''))
     return
-
-def getBtsRatesFromMySQL(dbConnector):
-    result = []
-    query = ("SELECT "
-             "rates.ID, "
-             "rates.SOURCE, "
-             "base_assets.SYMBOL AS BASE_SYMBOL, "
-             "base_assets.ASSET_ID AS BASE_BTS_ID, "
-             "base_assets.COINMARKETCAP_ID AS BASE_CMC_ID, "
-             "base_assets.COINMARKETCAP_CODE AS BASE_CMC_CODE, "
-             "quote_assets.SYMBOL AS QUOTE_SYMBOL, "
-             "quote_assets.ASSET_ID AS QUOTE_BTS_ID, "
-             "quote_assets.COINMARKETCAP_ID AS QUOTE_CMC_ID, "
-             "quote_assets.COINMARKETCAP_CODE AS QUOTE_CMC_CODE "
-             "FROM p2pbridge_exchange_rates_meta AS rates "
-             "LEFT JOIN p2pbridge_assets base_assets "
-             "ON rates.BASE_ASSET_ID=base_assets.ID "
-             "LEFT JOIN p2pbridge_assets quote_assets "
-             "ON rates.QUOTE_ASSET_ID=quote_assets.ID "
-             "WHERE rates.ACTIVE='Y'")
-    dbConnector.cursor.execute(query)
-    rates = dbConnector.cursor.fetchall()
-    for rate in rates:
-        result.append({'id': rate[0],
-                       'source': rate[1],
-                       'base_symbol': rate[2],
-                       'base_id_bts': rate[3],
-                       'base_id_cmc': rate[4],
-                       'base_code_cmc': rate[5],
-                       'quote_symbol': rate[6],
-                       'quote_id_bts': rate[7],
-                       'quote_id_cmc': rate[8],
-                       'quote_code_cmc': rate[9]})
-    return result
-
 
 def process_loop(check_interval=300):
     while True:
-        dbConnector = DBDriver(sql_conf)
-        rates_ids = getBtsRatesFromMySQL(dbConnector )
+        rates = session.query(Rate).filter_by(active = 'Y').all()
         dataCourses = []
-        for rate in rates_ids:
-            if rate['source']=='bitshares':
-                a = getDataFromBitshares(rate['base_id_bts'], rate['quote_id_bts'])
-                if a:
-                    a.update({'rate_id': rate['id']})
-                    dataCourses.append(a)
-            if rate['source']=='coinmarketcap':
-                a = getDataFromCoinmarketcap(rate['base_id_cmc'], rate['quote_code_cmc'])
-                if a:
-                    a.update({'rate_id': rate['id']})
-                    dataCourses.append(a)
-            if rate['source']=='cbrf':
-                a = getDataFromCBR(rate['base_symbol'], rate['quote_symbol'])
-                if a:
-                    a.update({'rate_id': rate['id']})
-                    dataCourses.append(a)
-            if rate['source']=='mmvb':
-                a = getDataFromMoex(rate['base_symbol'], rate['quote_symbol'])
-                if a:
-                    a.update({'rate_id': rate['id']})
-                    dataCourses.append(a)
-            if rate['source']=='imf':
-                a = getDataFromImf(rate['base_symbol'], rate['quote_symbol'])
-                if a:
-                    a.update({'rate_id': rate['id']})
-                    dataCourses.append(a)
-        query = "UPDATE p2pbridge_exchange_rates_values SET ACTIVE='N' WHERE ACTIVE='Y'"
-        dbConnector.cursor.execute(query)
-        dbConnector.cnx.commit()
-        query = formQuery(dataCourses)
-        dbConnector.cursor.execute(query)
-        dbConnector.cnx.commit()
-        dbConnector.cursor.close()
-        dbConnector.cnx.close()
+        for rate in rates:
+            if rate.source =='bitshares':
+                try:
+                    a = getDataFromBitshares(rate.base_asset.asset_id, rate.quote_asset.asset_id)
+                    if a:
+                        dataCourses.append(RateValue(rate.id, a))
+                        session.query(RateValue).\
+                            filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                            update({RateValue.active: 'N'})
+                except Exception:
+                    print(traceback.format_exc())
+            if rate.source =='coinmarketcap':
+                try:
+                    a = getDataFromCoinmarketcap(rate.base_asset.coinmarketcap_id, rate.quote_asset.coinmarketcap_code)
+                    if a:
+                        dataCourses.append(RateValue(rate.id, a))
+                        session.query(RateValue).\
+                            filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                            update({RateValue.active: 'N'})
+                except Exception:
+                    print(traceback.format_exc())
+            if rate.source =='cbrf':
+                try:
+                    a = getDataFromCBR(rate.base_asset.symbol, rate.quote_asset.symbol)
+                    if a:
+                        dataCourses.append(RateValue(rate.id, a))
+                        session.query(RateValue).\
+                            filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                            update({RateValue.active: 'N'})
+                except Exception:
+                    print(traceback.format_exc())
+            if rate.source =='mmvb':
+                try:
+                    a = getDataFromMoex(rate.base_asset.symbol, rate.quote_asset.symbol)
+                    if a:
+                        dataCourses.append(RateValue(rate.id, a))
+                        session.query(RateValue).\
+                            filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                            update({RateValue.active: 'N'})
+                except Exception:
+                    print(traceback.format_exc())
+            if rate.source =='imf':
+                try:
+                    a = getDataFromImf(rate.quote_asset.imf_name)
+                    if a:
+                        dataCourses.append(RateValue(rate.id, a))
+                        session.query(RateValue).\
+                            filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                            update({RateValue.active: 'N'})
+                except Exception:
+                    print(traceback.format_exc())
+        session.add_all(dataCourses)
+        session.commit()
         time.sleep(check_interval)
 
 process_loop(check_interval)

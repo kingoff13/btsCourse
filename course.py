@@ -1,13 +1,19 @@
 from bitshares.market import Market
 from bitshares import exceptions as BTSExceptions
+import bitshares as bts 
 from requests import get
 from lxml import objectify
 import time
+from grapheneapi.exceptions import NumRetriesReached
 import os
 import yaml
 import traceback
 from models import Rate, RateValue, Session
 from init import DBDriver
+
+class MyInstance():
+    instance=None
+    config={}
 
 # sudo docker run -p 3306:3306 --name mysql-server -e MYSQL_ROOT_PASSWORD=notalchemy -d mysql:latest
 # sudo docker container start mysql-server
@@ -109,12 +115,24 @@ def gettrades(market, start=False, stop=False):
 
 
 def getDataFromBitshares(base, quote='USD'):
-    try:
-        market = Market("{}:{}".format(base, quote))
-    except BTSExceptions.AssetDoesNotExistsException:
-        # raise Exception("")
-        print("{}:{}".format(base, quote) + "notexist")
-        return
+    MyInstance.config={'node': 'bitshares.crypto.fans'}
+    MyInstance.instance = bts.BitShares(**MyInstance.config)
+    tries=0
+    market=None
+    while market==None:
+        try:
+            market = Market("UDS:BTS", bitshares_instance=MyInstance.instance)
+        except NumRetriesReached:
+            print('websocket closed. Try reconnect '+str(tries))
+            time.sleep(5)
+            tries+=1
+            if tries>10:
+                print('Fall connect')
+                return
+        except BTSExceptions.AssetDoesNotExistsException:
+            # raise Exception("")
+            print("{}:{}".format(base, quote) + "notexist")
+            return
     return gettrades(market)
 
 

@@ -33,7 +33,7 @@ class RateValue(Base):
     id = Column(Integer, primary_key=True)
     rate_id = Column(Integer)
     rate = relationship('Rate', foreign_keys=[rate_id], primaryjoin='Rate.id == RateValue.rate_id')
-    datetime = Column(DateTime)
+    datetime = Column(DateTime(timezone=True))
     value = Column(Float)
     active = Column(String(1, 'utf8_unicode_ci'), default='N')
 

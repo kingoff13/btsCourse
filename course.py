@@ -115,11 +115,7 @@ def gettrades(market, start=False, stop=False):
 
 def getDataFromBitshares(base, quote='USD'):
     MyInstance.config={'node': 'wss://bitshares.nu/ws'}
-<<<<<<< Updated upstream
-    MyInstance.instance = bts.BitShares(**MyInstance.config)
-=======
     MyInstance.instance = BitShares(**MyInstance.config)
->>>>>>> Stashed changes
     tries=0
     market=None
     while market==None:

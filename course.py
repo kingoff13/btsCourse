@@ -115,13 +115,13 @@ def gettrades(market, start=False, stop=False):
 
 
 def getDataFromBitshares(base, quote='USD'):
-    MyInstance.config={'node': 'bitshares.crypto.fans'}
+    MyInstance.config={'node': 'wss://bitshares.nu/ws'}
     MyInstance.instance = bts.BitShares(**MyInstance.config)
     tries=0
     market=None
     while market==None:
         try:
-            market = Market("UDS:BTS", bitshares_instance=MyInstance.instance)
+            market = Market("{}:{}".format(base, quote), bitshares_instance=MyInstance.instance)
         except NumRetriesReached:
             print('websocket closed. Try reconnect '+str(tries))
             time.sleep(5)

@@ -1,6 +1,6 @@
 from bitshares.market import Market
 from bitshares import exceptions as BTSExceptions
-import bitshares as bts 
+from bitshares import BitShares
 from requests import get
 from lxml import objectify
 import time
@@ -9,7 +9,6 @@ import os
 import yaml
 import traceback
 from models import Rate, RateValue, Session
-from init import DBDriver
 
 class MyInstance():
     instance=None
@@ -116,7 +115,11 @@ def gettrades(market, start=False, stop=False):
 
 def getDataFromBitshares(base, quote='USD'):
     MyInstance.config={'node': 'wss://bitshares.nu/ws'}
+<<<<<<< Updated upstream
     MyInstance.instance = bts.BitShares(**MyInstance.config)
+=======
+    MyInstance.instance = BitShares(**MyInstance.config)
+>>>>>>> Stashed changes
     tries=0
     market=None
     while market==None:
@@ -180,7 +183,7 @@ def process_loop(check_interval=300):
         rates = session.query(Rate).filter_by(active = 'Y').all()
         dataCourses = []
         for rate in rates:
-            if rate.source =='bitshares':
+            if rate.source.name =='bitshares':
                 try:
                     a = getDataFromBitshares(rate.base_asset.asset_id, rate.quote_asset.asset_id)
                     if a:
@@ -190,7 +193,7 @@ def process_loop(check_interval=300):
                             update({RateValue.active: 'N'})
                 except Exception:
                     print(traceback.format_exc())
-            if rate.source =='coinmarketcap':
+            if rate.source.name =='coinmarketcap':
                 try:
                     a = getDataFromCoinmarketcap(rate.base_asset.coinmarketcap_id, rate.quote_asset.coinmarketcap_code)
                     if a:
@@ -200,7 +203,7 @@ def process_loop(check_interval=300):
                             update({RateValue.active: 'N'})
                 except Exception:
                     print(traceback.format_exc())
-            if rate.source =='cbrf':
+            if rate.source.name =='cbrf':
                 try:
                     a = getDataFromCBR(rate.base_asset.symbol, rate.quote_asset.symbol)
                     if a:
@@ -210,7 +213,7 @@ def process_loop(check_interval=300):
                             update({RateValue.active: 'N'})
                 except Exception:
                     print(traceback.format_exc())
-            if rate.source =='mmvb':
+            if rate.source.name =='mmvb':
                 try:
                     a = getDataFromMoex(rate.base_asset.symbol, rate.quote_asset.symbol)
                     if a:
@@ -220,7 +223,7 @@ def process_loop(check_interval=300):
                             update({RateValue.active: 'N'})
                 except Exception:
                     print(traceback.format_exc())
-            if rate.source =='imf':
+            if rate.source.name =='imf':
                 try:
                     a = getDataFromImf(rate.quote_asset.imf_name)
                     if a:

@@ -147,7 +147,7 @@ def getDataFromCoinmarketcap(base, quote='USD'):
 
 def getDataFromCBR(base, quote='USD'):
     if (quote=='RUB' or quote=='RUR') and __CbrfMoexAssocTable[base]:
-        f = get('http://www.cbr.ru/scripts/XML_daily.asp')
+        f = get('http://www.cbr.ru/scripts/XML_daily.asp ?date_req=' + time.strftime('%d/%m/%Y'))
         xmltest = objectify.fromstring(f.content)
         result = []
         for valute in xmltest.Valute:

@@ -1,13 +1,18 @@
 from bitshares.market import Market
 from bitshares import exceptions as BTSExceptions
+from bitshares import BitShares
 from requests import get
 from lxml import objectify
 import time
+from grapheneapi.exceptions import NumRetriesReached
 import os
 import yaml
 import traceback
 from models import Rate, RateValue, Session
-from init import DBDriver
+
+class MyInstance():
+    instance=None
+    config={}
 
 # sudo docker run -p 3306:3306 --name mysql-server -e MYSQL_ROOT_PASSWORD=notalchemy -d mysql:latest
 # sudo docker container start mysql-server
@@ -109,12 +114,24 @@ def gettrades(market, start=False, stop=False):
 
 
 def getDataFromBitshares(base, quote='USD'):
-    try:
-        market = Market("{}:{}".format(base, quote))
-    except BTSExceptions.AssetDoesNotExistsException:
-        # raise Exception("")
-        print("{}:{}".format(base, quote) + "notexist")
-        return
+    MyInstance.config={'node': 'wss://bitshares.nu/ws'}
+    MyInstance.instance = BitShares(**MyInstance.config)
+    tries=0
+    market=None
+    while market==None:
+        try:
+            market = Market("{}:{}".format(base, quote), bitshares_instance=MyInstance.instance)
+        except NumRetriesReached:
+            print('websocket closed. Try reconnect '+str(tries))
+            time.sleep(5)
+            tries+=1
+            if tries>10:
+                print('Fall connect')
+                return
+        except BTSExceptions.AssetDoesNotExistsException:
+            # raise Exception("")
+            print("{}:{}".format(base, quote) + "notexist")
+            return
     return gettrades(market)
 
 
@@ -130,7 +147,7 @@ def getDataFromCoinmarketcap(base, quote='USD'):
 
 def getDataFromCBR(base, quote='USD'):
     if (quote=='RUB' or quote=='RUR') and __CbrfMoexAssocTable[base]:
-        f = get('http://www.cbr.ru/scripts/XML_daily.asp ?date_req=' + time.strftime('%d/%m/%Y'))
+        f = get('http://www.cbr.ru/scripts/XML_daily.asp?date_req=' + time.strftime('%d/%m/%Y'))
         xmltest = objectify.fromstring(f.content)
         result = []
         for valute in xmltest.Valute:
@@ -162,56 +179,91 @@ def process_loop(check_interval=300):
         rates = session.query(Rate).filter_by(active = 'Y').all()
         dataCourses = []
         for rate in rates:
-            if rate.source =='bitshares':
-                try:
-                    a = getDataFromBitshares(rate.base_asset.asset_id, rate.quote_asset.asset_id)
-                    if a:
-                        dataCourses.append(RateValue(rate.id, a))
-                        session.query(RateValue).\
+            if rate.source.name =='bitshares':
+                last_update = session.query(RateValue).\
                             filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
-                            update({RateValue.active: 'N'})
-                except Exception:
-                    print(traceback.format_exc())
-            if rate.source =='coinmarketcap':
-                try:
-                    a = getDataFromCoinmarketcap(rate.base_asset.coinmarketcap_id, rate.quote_asset.coinmarketcap_code)
-                    if a:
-                        dataCourses.append(RateValue(rate.id, a))
-                        session.query(RateValue).\
+                            first()
+                if last_update==None: last_update=0
+                else: last_update=last_update.datetime.timestamp()+18000
+                if (time.time()-last_update>rate.source.frequency):
+                    try:
+                        a = getDataFromBitshares(rate.base_asset.asset_id, rate.quote_asset.asset_id)
+                        if a:
+                            dataCourses.append(RateValue(rate.id, a))
+                            session.query(RateValue).\
+                                filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                                update({RateValue.active: 'N'})
+                    except Exception:
+                        print('Error with rate id ' + str(rate.id))
+                        print(traceback.format_exc())
+            if rate.source.name =='coinmarketcap':
+                last_update = session.query(RateValue).\
                             filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
-                            update({RateValue.active: 'N'})
-                except Exception:
-                    print(traceback.format_exc())
-            if rate.source =='cbrf':
-                try:
-                    a = getDataFromCBR(rate.base_asset.symbol, rate.quote_asset.symbol)
-                    if a:
-                        dataCourses.append(RateValue(rate.id, a))
-                        session.query(RateValue).\
+                            first()
+                if last_update==None: last_update=0
+                else: last_update=last_update.datetime.timestamp()+18000
+                if (time.time()-last_update>rate.source.frequency):
+                    try:
+                        a = getDataFromCoinmarketcap(rate.base_asset.coinmarketcap_id, rate.quote_asset.coinmarketcap_code)
+                        if a:
+                            dataCourses.append(RateValue(rate.id, a))
+                            session.query(RateValue).\
+                                filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                                update({RateValue.active: 'N'})
+                    except Exception:
+                        print('Error with rate id ' + str(rate.id))
+                        print(traceback.format_exc())
+            if rate.source.name =='cbrf':
+                last_update = session.query(RateValue).\
                             filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
-                            update({RateValue.active: 'N'})
-                except Exception:
-                    print(traceback.format_exc())
-            if rate.source =='mmvb':
-                try:
-                    a = getDataFromMoex(rate.base_asset.symbol, rate.quote_asset.symbol)
-                    if a:
-                        dataCourses.append(RateValue(rate.id, a))
-                        session.query(RateValue).\
+                            first()
+                if last_update==None: last_update=0
+                else: last_update=last_update.datetime.timestamp()+18000
+                if (time.time()-last_update>rate.source.frequency):
+                    try:
+                        a = getDataFromCBR(rate.base_asset.symbol, rate.quote_asset.symbol)
+                        if a:
+                            dataCourses.append(RateValue(rate.id, a))
+                            session.query(RateValue).\
+                                filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                                update({RateValue.active: 'N'})
+                    except Exception:
+                        print('Error with rate id ' + str(rate.id))
+                        print(traceback.format_exc())
+            if rate.source.name =='mmvb':
+                last_update = session.query(RateValue).\
                             filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
-                            update({RateValue.active: 'N'})
-                except Exception:
-                    print(traceback.format_exc())
-            if rate.source =='imf':
-                try:
-                    a = getDataFromImf(rate.quote_asset.imf_name)
-                    if a:
-                        dataCourses.append(RateValue(rate.id, a))
-                        session.query(RateValue).\
+                            first()
+                if last_update==None: last_update=0
+                else: last_update=last_update.datetime.timestamp()+18000
+                if (time.time()-last_update>rate.source.frequency):
+                    try:
+                        a = getDataFromMoex(rate.base_asset.symbol, rate.quote_asset.symbol)
+                        if a:
+                            dataCourses.append(RateValue(rate.id, a))
+                            session.query(RateValue).\
+                                filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                                update({RateValue.active: 'N'})
+                    except Exception:
+                        print('Error with rate id ' + str(rate.id))
+                        print(traceback.format_exc())
+            if rate.source.name =='imf':
+                last_update = session.query(RateValue).\
                             filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
-                            update({RateValue.active: 'N'})
-                except Exception:
-                    print(traceback.format_exc())
+                            first()
+                if last_update==None: last_update=0
+                else: last_update=last_update.datetime.timestamp()+18000
+                if (time.time()-last_update>rate.source.frequency):
+                    try:
+                        a = getDataFromImf(rate.quote_asset.imf_name)
+                        if a:
+                            dataCourses.append(RateValue(rate.id, a))
+                            session.query(RateValue).\
+                                filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
+                                update({RateValue.active: 'N'})
+                    except Exception:
+                        print('Error with rate id ' + str(rate.id))
+                        print(traceback.format_exc())
         session.add_all(dataCourses)
         session.commit()
         time.sleep(check_interval)

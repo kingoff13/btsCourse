@@ -21,13 +21,19 @@ engine = create_engine(engine_string)
 Session = sessionmaker(bind=engine)
 Base = declarative_base()
 
+class RateSource(Base):
+    __tablename__ = 'p2pbridge_exchange_rates_source'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255, 'utf8_unicode_ci'))
+    frequency = Column(Integer)
+
 
 class RateValue(Base):
     __tablename__ = 'p2pbridge_exchange_rates_values'
     id = Column(Integer, primary_key=True)
     rate_id = Column(Integer)
     rate = relationship('Rate', foreign_keys=[rate_id], primaryjoin='Rate.id == RateValue.rate_id')
-    datetime = Column(DateTime)
+    datetime = Column(DateTime(timezone=True))
     value = Column(Float)
     active = Column(String(1, 'utf8_unicode_ci'), default='N')
 
@@ -41,7 +47,8 @@ class RateValue(Base):
 class Rate(Base):
     __tablename__ = 'p2pbridge_exchange_rates_meta'
     id = Column(Integer, primary_key=True)
-    source = Column(String(255, 'utf8_unicode_ci'))
+    source_id = Column(Integer)
+    source = relationship('RateSource', foreign_keys=[source_id], primaryjoin='RateSource.id == Rate.source_id')
     base_asset_id = Column(Integer)
     base_asset = relationship('Asset', foreign_keys=[base_asset_id], primaryjoin='Asset.id == Rate.base_asset_id')
     quote_asset_id = Column(Integer)
@@ -79,8 +86,9 @@ class Asset(Base):
     commission_out_transaction = Column(Float)
     imf_name = Column(String(100, 'utf8_unicode_ci'))
 
-#ourUser = session.query(Rate).all()
-#for each in ourUser:
-#    print(each)
-#newOrder = RateValue(69, 111)
-#session.add(newOrder)
+def init_db():
+    Base.metadata.create_all(engine)
+
+if __name__ == '__main__':
+    session = Session()
+    init_db()

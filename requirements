@@ -1,5 +1,5 @@
 bitshares
-#sqlalchemy
+sqlalchemy
 #redis
 #pyfcm
 pyyaml

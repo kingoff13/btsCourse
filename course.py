@@ -147,7 +147,7 @@ def getDataFromCoinmarketcap(base, quote='USD'):
 
 def getDataFromCBR(base, quote='USD'):
     if (quote=='RUB' or quote=='RUR') and __CbrfMoexAssocTable[base]:
-        f = get('http://www.cbr.ru/scripts/XML_daily.asp ?date_req=' + time.strftime('%d/%m/%Y'))
+        f = get('http://www.cbr.ru/scripts/XML_daily.asp?date_req=' + time.strftime('%d/%m/%Y'))
         xmltest = objectify.fromstring(f.content)
         result = []
         for valute in xmltest.Valute:
@@ -194,6 +194,7 @@ def process_loop(check_interval=300):
                                 filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
                                 update({RateValue.active: 'N'})
                     except Exception:
+                        print('Error with rate id ' + str(rate.id))
                         print(traceback.format_exc())
             if rate.source.name =='coinmarketcap':
                 last_update = session.query(RateValue).\
@@ -210,6 +211,7 @@ def process_loop(check_interval=300):
                                 filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
                                 update({RateValue.active: 'N'})
                     except Exception:
+                        print('Error with rate id ' + str(rate.id))
                         print(traceback.format_exc())
             if rate.source.name =='cbrf':
                 last_update = session.query(RateValue).\
@@ -226,6 +228,7 @@ def process_loop(check_interval=300):
                                 filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
                                 update({RateValue.active: 'N'})
                     except Exception:
+                        print('Error with rate id ' + str(rate.id))
                         print(traceback.format_exc())
             if rate.source.name =='mmvb':
                 last_update = session.query(RateValue).\
@@ -242,6 +245,7 @@ def process_loop(check_interval=300):
                                 filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
                                 update({RateValue.active: 'N'})
                     except Exception:
+                        print('Error with rate id ' + str(rate.id))
                         print(traceback.format_exc())
             if rate.source.name =='imf':
                 last_update = session.query(RateValue).\
@@ -258,6 +262,7 @@ def process_loop(check_interval=300):
                                 filter(RateValue.rate_id == rate.id, RateValue.active == 'Y').\
                                 update({RateValue.active: 'N'})
                     except Exception:
+                        print('Error with rate id ' + str(rate.id))
                         print(traceback.format_exc())
         session.add_all(dataCourses)
         session.commit()
